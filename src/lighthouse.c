@@ -1,3 +1,4 @@
+
 /** @file lighthouse.c
  *  @author Bram Wasti <bwasti@cmu.edu>
  *
@@ -49,6 +50,12 @@
 #include "display.h"
 #include "globals.h"
 #include "results.h"
+
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+#include <X11/Xutil.h>
+#include <X11/Xlib-xcb.h>
+
 
 /* declared in <string.h>, but not unless you define a suitable macro. Not sure which macro
    (see `man strdup`) is correct for this situation. */
@@ -650,6 +657,28 @@ void kill_zombie(void) {
   while(wait(NULL) == -1);
 }
 
+void grab_focus(xcb_connection_t *connection, Display *display, xcb_window_t *window) {
+
+  ///*
+  struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000  };
+	Window focuswin, mainwin = *(Window*)window;
+	int i, revertwin;
+
+	for (i = 0; i < 100; ++i) {
+		XGetInputFocus(display, &focuswin, &revertwin);
+		if (focuswin == mainwin)
+			return;
+		XSetInputFocus(display, mainwin, RevertToParent, CurrentTime);
+
+    //xcb_void_cookie_t focus_cookie = xcb_set_input_focus_checked(connection, XCB_INPUT_FOCUS_POINTER_ROOT, *window, XCB_CURRENT_TIME);
+    //check_xcb_cookie(focus_cookie, connection, "Failed to grab focus.");
+		nanosleep(&ts, NULL);
+	}
+  //*/
+
+  //die("cannot grab focus");
+}
+
 
 
 /* @brief The main function. Initialization happens here.
@@ -720,8 +749,11 @@ int main(int argc, char **argv) {
   /* The main way to communicate with our remote process. */
   FILE *to_child = fdopen(to_child_fd, "w");
 
+  // X lib connection
+  Display * xlib_connection = XOpenDisplay(NULL); 
+
   /* Connect to the X server. */
-  xcb_connection_t *connection = xcb_connect(NULL, NULL);
+  xcb_connection_t *connection = XGetXCBConnection(xlib_connection); //  xcb_connect(NULL, NULL);
 
   /* Setup keyboard stuff. Thanks Apple! */
   xcb_key_symbols_t *keysyms = xcb_key_symbols_alloc(connection);
@@ -915,16 +947,24 @@ int main(int argc, char **argv) {
   }
   xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
 
+ //struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000  };
+  
+  int focus = 1;
   xcb_generic_event_t *event;
   while ((event = xcb_wait_for_event(connection))) {
     switch (event->response_type & ~0x80) {
       case XCB_EXPOSE: {
         /* Get the input focus. */
-        xcb_void_cookie_t focus_cookie = xcb_set_input_focus_checked(connection, XCB_INPUT_FOCUS_POINTER_ROOT, window, XCB_CURRENT_TIME);
-        check_xcb_cookie(focus_cookie, connection, "Failed to grab focus.");
 
-        /* Redraw. */
+        if (focus) {
+          fprintf(stdout, "Attempting to grab focus\n");
+          grab_focus(connection, xlib_connection, &window);
+
+          /* Redraw. */
+          focus = 0;
+        }
         redraw_all(connection, window, cairo_context, cairo_surface, query_string, query_cursor_index);
+
         break;
       }
       case XCB_KEY_PRESS: {
@@ -942,8 +982,6 @@ int main(int argc, char **argv) {
       }
       case XCB_EVENT_MASK_BUTTON_PRESS: {
         /* Get the input focus. */
-        xcb_void_cookie_t focus_cookie = xcb_set_input_focus_checked(connection, XCB_INPUT_FOCUS_POINTER_ROOT, window, XCB_CURRENT_TIME);
-        check_xcb_cookie(focus_cookie, connection, "Failed to grab focus.");
         break;
       }
       default:

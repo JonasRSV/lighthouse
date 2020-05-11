@@ -14,9 +14,9 @@ INCDIR=$(SRCDIR)/inc
 SRCS=$(wildcard $(SRCDIR)/*.c)
 OBJS=$(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SRCS))
 
-CFLAGS+=-O2 -Wall -std=c99
+CFLAGS+=-O2 -Wall -std=c99 -lX11
 CFLAGS_DEBUG+=-O0 -g3 -Werror -DDEBUG -pedantic
-LDFLAGS+=-lxcb -lxcb-xkb -lxcb-xinerama -lxcb-randr -lcairo -lpthread
+LDFLAGS+=-lxcb -lxcb-xkb -lxcb-xinerama -lxcb-randr -lcairo -lpthread -lX11 -lX11-xcb
 
 # OS X keeps xcb in a different spot
 platform=$(shell uname)
