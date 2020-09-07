@@ -658,6 +658,8 @@ void kill_zombie(void) {
 }
 
 void grab_focus(xcb_connection_t *connection, Display *display, xcb_window_t *window) {
+  pthread_mutex_lock(&global.result_mutex);
+  pthread_mutex_lock(&global.draw_mutex);
 
   ///*
   struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000  };
@@ -676,6 +678,8 @@ void grab_focus(xcb_connection_t *connection, Display *display, xcb_window_t *wi
 	}
   //*/
 
+  pthread_mutex_unlock(&global.result_mutex);
+  pthread_mutex_unlock(&global.draw_mutex);
   //die("cannot grab focus");
 }
 
@@ -948,7 +952,13 @@ int main(int argc, char **argv) {
   xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
 
  //struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000  };
+
+  // Get default args
+  if (write_to_remote(to_child, "%s\n", query_string)) {
+    fprintf(stderr, "Failed to write.\n");
+  }
   
+  redraw_all(connection, window, cairo_context, cairo_surface, query_string, query_cursor_index);
   int focus = 1;
   xcb_generic_event_t *event;
   while ((event = xcb_wait_for_event(connection))) {
@@ -957,12 +967,10 @@ int main(int argc, char **argv) {
         /* Get the input focus. */
 
         if (focus) {
-          fprintf(stdout, "Attempting to grab focus\n");
           grab_focus(connection, xlib_connection, &window);
-
-          /* Redraw. */
           focus = 0;
         }
+        /* Redraw. */
         redraw_all(connection, window, cairo_context, cairo_surface, query_string, query_cursor_index);
 
         break;
